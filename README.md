@@ -1,6 +1,6 @@
 # <div align="center">RP CORE — Universo Hackintosh</div>
 
-<div align="center">IMG-PRINT</div>
+<div align="center"><img width="1524" height="895" alt="RP-CORE-v1 0 0" src="https://github.com/user-attachments/assets/959fcd65-32e8-4abf-b20c-6709e46c8265" /></div>
 
 Script to apply **Root Patching** (SSV snapshot) for:
 
