@@ -1,0 +1,44 @@
+# <div align="center">RP CORE — Universo Hackintosh</div>
+
+<div align="center">IMG-PRINT</div>
+
+Script to apply **Root Patching** (SSV snapshot) for:
+
+- **WiFi (BCM94360/Intel)** on macOS **Sonoma (14)**, **Sequoia (15)** and **Tahoe (26)**
+- **Audio (AppleHDA)** **only** on macOS **Tahoe (26)** (requires KDK + `kmutil`)
+
+---
+
+## Key features
+
+- **Automatic detection** of the macOS version to apply the correct patch.
+- **Compatible with** WiFi (Fenvi/BCM94360 and Intel) and Audio (any codecs).
+- **Log generation** in the script's ./logs directory, saved automatically.
+- **100% transparent** in Shell Script + Python.
+- **EFI validation** from config.plist for mandatory requirements to apply this patch.
+- **Modular System** for applying patches (WiFi Only, Audio Only or WiFi + Audio).
+- **Snapshots Management** for modular patches.
+- **Without any Login Items** in your Setup for audio/wifi work.
+
+---
+
+## Important requirements
+
+- **SIP Disabled** `csr-active-config` set to `03080000`;
+- **Kexts already loaded in your EFI**
+    - BCM kexts (AMFIPass.kext, IO80211FamilyLegacy.kext, IOSkywalkFamily.kext and AirPortBrcmNIC.kext)
+    - Intel (AirportItlwm.kext/Ventura)
+    - Audio (AppleALC.kext)
+- **Kernel/Block** Patches
+    - Enabled/Install `Allow IOSkywalk Downgrade`
+- **Gatekeeper disabled**, or execution manually allowed in System Settings > Privacy & Security;
+    - `sudo spctl --master-disable`
+- **Hackintosh technical knowledge** at least at a basic/intermediate level for troubleshooting if problems occur.
+
+---
+
+## Credits
+
+- [Apple](https://www.apple.com)
+- [OpenCore Legacy Patcher](https://github.com/dortania/OpenCore-Legacy-Patcher)
+- [EduCovas](https://github.com/covasedu)
