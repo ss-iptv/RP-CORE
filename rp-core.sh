@@ -1561,14 +1561,32 @@ while true; do
       _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
       ;;
     6)
+      clear
+      banner
+      echo
+      info "Available boot snapshots:"
+      echo
+      list_snapshots_readonly_screen_only
+      echo
       local uuid=""
-      read -r -p "Enter snapshot UUID: " uuid || true
+      read -r -p "Enter snapshot UUID (or press ENTER to return to the main menu): " uuid || true
       uuid="${uuid:-}"
       if [[ -z "$uuid" ]]; then
-        warn "Empty UUID."
-        _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
+        info "No UUID provided. Returning to the main menu."
         continue
       fi
+
+      echo
+      info "Selected UUID: $uuid"
+      local confirm=""
+      echo
+      read -r -p "Proceed with this UUID? (y/N) " confirm || true
+      confirm="$(echo "${confirm:-}" | tr '[:upper:]' '[:lower:]')"
+      if [[ "$confirm" != "y" && "$confirm" != "yes" ]]; then
+        warn "Aborted by user. Returning to the main menu."
+        continue
+      fi
+
       local args=(--boot-snapshot "$uuid")
       [[ "$vflag" == true ]] && args+=(--verbose)
       [[ "$dflag" == true ]] && args+=(--dry-run)
@@ -1582,6 +1600,7 @@ while true; do
       _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
       ;;
     7)
+
       echo
       warn "WARNING: Rolling back to STOCK will disable ALL previously applied patches (WiFi/Audio) and any other SSV modifications."
       warn "This action sets the boot snapshot to Apple's latest SEALED snapshot."
