@@ -116,7 +116,7 @@ RPVERSION=1.0.0
 resize_terminal() {
   [[ -t 1 ]] || return 0
   # rows=30, cols=125
-  printf '\033[8;32;125t' 2>/dev/null || true
+  printf '\033[8;32;130t' 2>/dev/null || true
 }
 
 resize_terminal
@@ -214,7 +214,7 @@ trap on_err ERR
 
 # -------- Banner/Header --------
 banner() {
-  _screen "${C_BOLD}${C_MAGENTA}========================================================================================================================${C_RESET}"
+  _screen "${C_BOLD}${C_MAGENTA}=================================================================================================================================${C_RESET}"
   _screen "${C_BOLD}${C_MAGENTA}  Universo Hackintosh - RP CORE (WiFi/Audio)${C_RESET}"
   _screen "${C_DIM}  Script   : ${ROOT_DIR}/rp-core.sh${C_RESET}"
   if $LOG_ENABLED; then
@@ -223,7 +223,7 @@ banner() {
     _screen "${C_DIM}  Log      : (disabled - read-only mode)${C_RESET}"
   fi
   _screen "${C_DIM}  Version  : ${RPVERSION}${C_RESET}"
-  _screen "${C_BOLD}${C_MAGENTA}========================================================================================================================${C_RESET}"
+  _screen "${C_BOLD}${C_MAGENTA}=================================================================================================================================${C_RESET}"
 }
 
 # -------- Splash (branding) --------
@@ -240,9 +240,9 @@ show_splash() {
 
   clear 2>/dev/null || true
 
-  _screen "${C_BOLD}${C_MAGENTA}========================================================================================================================${C_RESET}"
+  _screen "${C_BOLD}${C_MAGENTA}=================================================================================================================================${C_RESET}"
   _screen "${C_BOLD}${C_MAGENTA}  Universo Hackintosh - RP CORE (WiFi/Audio)${C_RESET}"
-  _screen "${C_BOLD}${C_MAGENTA}========================================================================================================================${C_RESET}"
+  _screen "${C_BOLD}${C_MAGENTA}=================================================================================================================================${C_RESET}"
   _screen ""
   _screen "${C_BOLD}${C_MAGENTA}██    ██ ███    ██ ██ ██    ██ ███████ ██████  ███████  ██████  ${C_RESET}"
   _screen "${C_BOLD}${C_MAGENTA}██    ██ ████   ██ ██ ██    ██ ██      ██   ██ ██      ██    ██ ${C_RESET}"
@@ -268,7 +268,7 @@ show_splash() {
   _screen ""
   _screen "${C_YELLOW}${C_BOLD}Warning #1: ${C_RESET} No copying and/or redistribution, in whole or in part, of the contents of this script/package is permitted."
   _screen "${C_YELLOW}${C_BOLD}Warning #2: ${C_RESET} does not come with any warranty, use at your own risk."
-  _screen "${C_BOLD}${C_MAGENTA}========================================================================================================================${C_RESET}"
+  _screen "${C_BOLD}${C_MAGENTA}=================================================================================================================================${C_RESET}"
   echo
 
   read -r -p "Press ENTER to continue..." _ || true
@@ -1582,6 +1582,17 @@ while true; do
       _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
       ;;
     7)
+      echo
+      warn "WARNING: Rolling back to STOCK will disable ALL previously applied patches (WiFi/Audio) and any other SSV modifications."
+      warn "This action sets the boot snapshot to Apple's latest SEALED snapshot."
+      echo
+      read -r -p "Type Y to proceed, or press ENTER to return to the main menu: " ans || true
+      ans="$(echo "${ans:-}" | tr '[:upper:]' '[:lower:]')"
+      if [[ "$ans" != "y" && "$ans" != "yes" ]]; then
+        info "Rollback cancelled. Returning to the main menu."
+        continue
+      fi
+
       local args=(--rollback-stock)
       [[ "$vflag" == true ]] && args+=(--verbose)
       [[ "$dflag" == true ]] && args+=(--dry-run)
