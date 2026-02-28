@@ -36,7 +36,8 @@ Script to apply **Root Patching** (SSV snapshot) for:
     - `-amfipassbeta` on `boot-args`
 - **Gatekeeper disabled**, or execution manually allowed in System Settings > Privacy & Security;
     - `sudo spctl --master-disable`
-- **Hackintosh technical knowledge** at least at a basic/intermediate level for troubleshooting if problems occur.
+- **Hackintosh technical knowledge**
+    - At least at a basic/intermediate level for troubleshooting if problems occur.
 
 ---
 
