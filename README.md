@@ -24,13 +24,16 @@ Script to apply **Root Patching** (SSV snapshot) for:
 
 ## Important requirements
 
-- **SIP Disabled** `csr-active-config` set to `03080000`;
-- **Kexts already loaded in your EFI**
-    - BCM kexts (AMFIPass.kext, IO80211FamilyLegacy.kext, IOSkywalkFamily.kext and AirPortBrcmNIC.kext)
-    - Intel (AirportItlwm.kext/Ventura)
-    - Audio (AppleALC.kext)
-- **Kernel/Block** Patches
-    - Enabled/Install `Allow IOSkywalk Downgrade`
+- **SIP Partially Disabled**
+    - `csr-active-config` = `03080000`;
+- **Kexts loaded in your EFI**
+    - For BCM94360 (AMFIPass.kext, IO80211FamilyLegacy.kext, IOSkywalkFamily.kext and AirPortBrcmNIC.kext)
+    - For Intel (AirportItlwm.kext/Ventura)
+    - For Audio (AppleALC.kext)
+- **Kernel/Block Patches**
+    - `Allow IOSkywalk Downgrade - Patch for activate BCM Wireless`
+- **Permission to load AMFIPass Beta**
+    - `-amfipassbeta` on `boot-args`
 - **Gatekeeper disabled**, or execution manually allowed in System Settings > Privacy & Security;
     - `sudo spctl --master-disable`
 - **Hackintosh technical knowledge** at least at a basic/intermediate level for troubleshooting if problems occur.
