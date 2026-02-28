@@ -276,6 +276,60 @@ show_splash() {
 }
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
 
+
+# ---------- SIP guard (mutating actions require SIP disabled) ----------
+# Exit codes used only when called from the interactive menu wrapper.
+SIP_GUARD_RC_MENU_RETURN=112
+SIP_GUARD_RC_QUIT=113
+
+sip_is_enabled() {
+  /usr/bin/csrutil status 2>&1 | /usr/bin/grep -q "System Integrity Protection status: enabled"
+}
+
+sip_prompt_return_or_quit() {
+  local ans=""
+  echo
+  read -r -p "Press ENTER to return to the main menu, or Q to quit: " ans || true
+  ans="${ans:-}"
+  if [[ "$ans" == "Q" || "$ans" == "q" ]]; then
+    ok "Bye!"
+    exit "${SIP_GUARD_RC_QUIT}"
+  fi
+
+  # If this execution was started from the interactive menu, return a special code so
+  # the parent can immediately resume the menu without printing extra prompts.
+  if [[ "${RP_CORE_PARENT_MENU:-0}" == "1" ]]; then
+    exit "${SIP_GUARD_RC_MENU_RETURN}"
+  fi
+
+  # Non-interactive CLI: there is no menu to return to.
+  exit 1
+}
+
+sip_abort_mutation_due_to_sip() {
+  local action="${1:-"(unknown action)"}"
+  local csr_out=""
+  csr_out="$(/usr/bin/csrutil status 2>&1 || true)"
+
+  # Force log creation (mutating actions are expected to have logs).
+  LOG_ENABLED=true
+  init_log_if_needed
+
+  _log "[ERR ] SIP guard: System Integrity Protection is ENABLED."
+  _log "[INFO] Aborting: ${action}"
+  _log "[INFO] csrutil status:"
+  while IFS= read -r line; do
+    _log "       ${line}"
+  done <<< "${csr_out}"
+
+  _screen "${C_RED}${C_BOLD}[ERR ]${C_RESET} System Integrity Protection (SIP) is ENABLED. Aborting..."
+  echo
+  _screen "${C_YELLOW}${C_BOLD}[INFO]${C_RESET} A log has been created: ${C_DIM}${LOG_FILE}${C_RESET}"
+  
+  sip_prompt_return_or_quit
+}
+
+
 # ---------- Hash helpers (global) ----------
 sha256_file() { /usr/bin/shasum -a 256 "$1" 2>/dev/null | awk '{print $1}'; }
 
@@ -1351,7 +1405,13 @@ while true; do
       local args=(--mode wifi)
       [[ "$vflag" == true ]] && args+=(--verbose)
       [[ "$dflag" == true ]] && args+=(--dry-run)
-      "${ROOT_DIR}/rp-core.sh" "${args[@]}"
+      local rc=0
+
+      RP_CORE_PARENT_MENU=1 "${ROOT_DIR}/rp-core.sh" "${args[@]}" || rc=$?
+
+      if [[ "$rc" -eq "${SIP_GUARD_RC_QUIT}" ]]; then ok "Bye!"; break; fi
+
+      if [[ "$rc" -eq "${SIP_GUARD_RC_MENU_RETURN}" ]]; then continue; fi
       # If user chose not to reboot, offer clean return to menu or quit
       _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
       ;;
@@ -1385,7 +1445,16 @@ while true; do
         *) warn "Invalid selection. Aborting."; _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break; continue ;;
       esac
 
-      "${ROOT_DIR}/rp-core.sh" "${args[@]}"
+      local rc=0
+
+
+      RP_CORE_PARENT_MENU=1 "${ROOT_DIR}/rp-core.sh" "${args[@]}" || rc=$?
+
+
+      if [[ "$rc" -eq "${SIP_GUARD_RC_QUIT}" ]]; then ok "Bye!"; break; fi
+
+
+      if [[ "$rc" -eq "${SIP_GUARD_RC_MENU_RETURN}" ]]; then continue; fi
       _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
       ;;
     4)
@@ -1418,7 +1487,16 @@ while true; do
         *) warn "Invalid selection. Aborting."; _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break; continue ;;
       esac
 
-      "${ROOT_DIR}/rp-core.sh" "${args[@]}"
+      local rc=0
+
+
+      RP_CORE_PARENT_MENU=1 "${ROOT_DIR}/rp-core.sh" "${args[@]}" || rc=$?
+
+
+      if [[ "$rc" -eq "${SIP_GUARD_RC_QUIT}" ]]; then ok "Bye!"; break; fi
+
+
+      if [[ "$rc" -eq "${SIP_GUARD_RC_MENU_RETURN}" ]]; then continue; fi
       _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
       ;;
     5)
@@ -1439,14 +1517,26 @@ while true; do
       local args=(--boot-snapshot "$uuid")
       [[ "$vflag" == true ]] && args+=(--verbose)
       [[ "$dflag" == true ]] && args+=(--dry-run)
-      "${ROOT_DIR}/rp-core.sh" "${args[@]}"
+      local rc=0
+
+      RP_CORE_PARENT_MENU=1 "${ROOT_DIR}/rp-core.sh" "${args[@]}" || rc=$?
+
+      if [[ "$rc" -eq "${SIP_GUARD_RC_QUIT}" ]]; then ok "Bye!"; break; fi
+
+      if [[ "$rc" -eq "${SIP_GUARD_RC_MENU_RETURN}" ]]; then continue; fi
       _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
       ;;
     7)
       local args=(--rollback-stock)
       [[ "$vflag" == true ]] && args+=(--verbose)
       [[ "$dflag" == true ]] && args+=(--dry-run)
-      "${ROOT_DIR}/rp-core.sh" "${args[@]}"
+      local rc=0
+
+      RP_CORE_PARENT_MENU=1 "${ROOT_DIR}/rp-core.sh" "${args[@]}" || rc=$?
+
+      if [[ "$rc" -eq "${SIP_GUARD_RC_QUIT}" ]]; then ok "Bye!"; break; fi
+
+      if [[ "$rc" -eq "${SIP_GUARD_RC_MENU_RETURN}" ]]; then continue; fi
       _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
       ;;
     8)
@@ -1582,6 +1672,27 @@ if [[ "$LIST_KDKS" == true ]]; then
   audit_environment "$OS_VER" "$BUILD_VER" "$MAJOR" "hide"
   list_kdks_readonly_screen_only
   exit 0
+fi
+
+
+# SIP guard: block ANY mutating action when SIP is enabled.
+# Applies to: --mode wifi|audio|both, --rollback-stock, --boot-snapshot <UUID>
+if sip_is_enabled; then
+  if [[ "$DO_ROLLBACK" == true ]] || [[ -n "$BOOT_UUID" ]] || [[ -n "${MODE:-}" ]]; then
+    local_action="(unknown)"
+    if [[ "$DO_ROLLBACK" == true ]]; then
+      local_action="rollback-stock"
+    elif [[ -n "$BOOT_UUID" ]]; then
+      local_action="boot-snapshot (UUID: ${BOOT_UUID})"
+    else
+      local_action="mode '${MODE}'"
+    fi
+
+    # Add a silent environment audit to the log (useful for support).
+    audit_environment "$OS_VER" "$BUILD_VER" "$MAJOR" "hide"
+
+    sip_abort_mutation_due_to_sip "$local_action"
+  fi
 fi
 
 # Mutating flows
