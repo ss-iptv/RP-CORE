@@ -839,7 +839,7 @@ do_status() {
     # args: payload_file system_file label
     local pf="$1" sf="$2" label="$3"
     if [[ ! -e "$sf" ]]; then
-      _screen "  ${C_YELLOW}⚠️${C_RESET} ${C_DIM}${label}${C_RESET} (missing from the SSV)"
+      _screen "  ${C_YELLOW}⚠️ ${C_RESET} ${C_DIM}${label}${C_RESET} (missing from the SSV)"
       return 1
     fi
     local ph sh
@@ -849,7 +849,7 @@ do_status() {
       _screen "  ${C_GREEN}✅${C_RESET} ${C_DIM}${label}${C_RESET} (match payload)"
       return 0
     fi
-    _screen "  ${C_YELLOW}⚠️${C_RESET} ${C_DIM}${label}${C_RESET} (exists, but DIFFERS from the payload)"
+    _screen "  ${C_YELLOW}⚠️ ${C_RESET} ${C_DIM}${label}${C_RESET} (exists, but DIFFERS from the payload)"
     return 1
   }
 
@@ -896,9 +896,9 @@ do_status() {
       if [[ "$found_marker" -eq 0 ]]; then
         # fallback: avoid false positives by only checking existence of directory and warning it's inconclusive
         if [[ -e "$item" ]]; then
-          _screen "  ${C_YELLOW}⚠️${C_RESET} ${C_DIM}${item}${C_RESET} (only the directory exists; no markers to compare)"
+          _screen "  ${C_YELLOW}⚠️ ${C_RESET} ${C_DIM}${item}${C_RESET} (only the directory exists; no markers to compare)"
         else
-          _screen "  ${C_YELLOW}⚠️${C_RESET} ${C_DIM}${item}${C_RESET} (directory missing from the SSV)"
+          _screen "  ${C_YELLOW}⚠️ ${C_RESET} ${C_DIM}${item}${C_RESET} (directory missing from the SSV)"
           ok_local=1
         fi
       fi
@@ -906,7 +906,7 @@ do_status() {
       return $ok_local
     fi
 
-    _screen "  ${C_YELLOW}⚠️${C_RESET} ${C_DIM}${item}${C_RESET} (invalid item in the payload)"
+    _screen "  ${C_YELLOW}⚠️ ${C_RESET} ${C_DIM}${item}${C_RESET} (invalid item in the payload)"
     return 1
   }
 
@@ -918,7 +918,7 @@ do_status() {
       if [[ -e "${wifi_p}${item}" ]]; then
         _check_item_markers "$wifi_p" "$item" || w_ok=1
       else
-        _screen "  ${C_YELLOW}⚠️${C_RESET} ${C_DIM}${item}${C_RESET} (missing from the payload)"
+        _screen "  ${C_YELLOW}⚠️ ${C_RESET} ${C_DIM}${item}${C_RESET} (missing from the payload)"
         w_ok=1
       fi
     done < <(wifi_items_for_major "$major" 2>/dev/null || true)
@@ -936,7 +936,7 @@ do_status() {
       if [[ -e "${audio_p}${item}" ]]; then
         _check_item_markers "$audio_p" "$item" || a_ok=1
       else
-        _screen "  ${C_YELLOW}⚠️${C_RESET} ${C_DIM}${item}${C_RESET} (missing from the payload)"
+        _screen "  ${C_YELLOW}⚠️ ${C_RESET} ${C_DIM}${item}${C_RESET} (missing from the payload)"
         a_ok=1
       fi
     done < <(audio_items_for_major "$major" 2>/dev/null || true)
@@ -949,14 +949,14 @@ do_status() {
   if [[ "$w_ok" -eq 0 ]]; then
     _screen "${C_BOLD}WiFi:${C_RESET} ${C_GREEN}✅ applied (hash matches payload)${C_RESET}"
   else
-    _screen "${C_BOLD}WiFi:${C_RESET} ${C_YELLOW}⚠️ not applied or differs from the payload${C_RESET}"
+    _screen "${C_BOLD}WiFi:${C_RESET} ${C_YELLOW}⚠️  not applied or differs from the payload${C_RESET}"
   fi
 
   if [[ "$major" == "26" ]]; then
     if [[ "$a_ok" -eq 0 ]]; then
       _screen "${C_BOLD}Audio:${C_RESET} ${C_GREEN}✅ applied (hash matches payload)${C_RESET}"
     else
-      _screen "${C_BOLD}Audio:${C_RESET} ${C_YELLOW}⚠️ not applied or differs from the payload${C_RESET}"
+      _screen "${C_BOLD}Audio:${C_RESET} ${C_YELLOW}⚠️  not applied or differs from the payload${C_RESET}"
     fi
   else
     _screen "${C_BOLD}Audio:${C_RESET} ${C_DIM}(not applicable)${C_RESET}"
@@ -1055,6 +1055,37 @@ def kext_enabled(name_substr):
     any_enabled = any(en for _, en in hits)
     return any_enabled, hits
 
+
+def _norm_kernel(v):
+    if v is None:
+        return ""
+    if isinstance(v, (bytes, bytearray)):
+        try:
+            return v.decode("utf-8", "ignore")
+        except Exception:
+            return str(v)
+    return str(v)
+
+def kext_hits_minmax(name_substr):
+    hits = []
+    for e in k_add:
+        bp = str(e.get("BundlePath", ""))
+        if name_substr in bp or bp.endswith(name_substr):
+            hits.append((bp, bool(e.get("Enabled", False)),
+                         _norm_kernel(e.get("MinKernel", "")),
+                         _norm_kernel(e.get("MaxKernel", ""))))
+    return hits
+
+def kext_minmax_blank(name_substr):
+    hits = kext_hits_minmax(name_substr)
+    if not hits:
+        return True, []
+    ok = True
+    for _, _, mink, maxk in hits:
+        if str(mink).strip() or str(maxk).strip():
+            ok = False
+    return ok, hits
+
 def find_block(identifier):
     hits = []
     for e in k_block:
@@ -1089,6 +1120,29 @@ else:
             parent = "IO80211FamilyLegacy.kext/PlugIns"
         where.append("%s [%s] (Enabled=%s)" % (bp, parent, en))
     emit("WIFI_AIRPORTBRCMNIC", ok, "; ".join(where))
+
+# WiFi: MinKernel/MaxKernel must be EMPTY for BCM-related kexts/plugins
+for cid, needle in [
+    ("WIFI_MINMAX_AMFIPASS", "AMFIPass.kext"),
+    ("WIFI_MINMAX_IO80211FAMILYLEGACY", "IO80211FamilyLegacy.kext"),
+    ("WIFI_MINMAX_IOSKYWALKFAMILY", "IOSkywalkFamily.kext"),
+    ("WIFI_MINMAX_AIRPORTBRCMNIC", "AirPortBrcmNIC.kext"),
+]:
+    ok_mm, hits_mm = kext_minmax_blank(needle)
+    if not hits_mm:
+        emit(cid, True, "%s : NOT FOUND in Kernel->Add (skip MinKernel/MaxKernel check)" % needle)
+    else:
+        desc = []
+        for bp, en, mink, maxk in hits_mm:
+            mk = str(mink).strip()
+            xk = str(maxk).strip()
+            if mk == "":
+                mk = "<empty>"
+            if xk == "":
+                xk = "<empty>"
+            desc.append("%s (Enabled=%s MinKernel=%s MaxKernel=%s)" % (bp, en, mk, xk))
+        extra = "" if ok_mm else " (MinKernel/MaxKernel must be empty)"
+        emit(cid, ok_mm, ", ".join(desc) + extra)
 
 # Kernel->Block entry
 ident = "com.apple.iokit.IOSkywalkFamily"
@@ -1188,9 +1242,11 @@ PY
     case "$cid" in
       WIFI_*)
         if [[ "$okflag" == "1" ]]; then
-          _screen "  ${C_GREEN}✅${C_RESET} ${C_BOLD}${cid}${C_RESET} ${C_DIM}${details}${C_RESET}"
+          _screen "  ${C_GREEN}✅${C_RESET} ${C_BOLD}${cid}${C_RESET}"
+          # _screen "  ${C_GREEN}✅${C_RESET} ${C_BOLD}${cid}${C_RESET} ${C_DIM}${details}${C_RESET}"
         else
-          _screen "  ${C_YELLOW}⚠️${C_RESET} ${C_BOLD}${cid}${C_RESET} ${C_DIM}${details}${C_RESET}"
+          _screen "  ${C_YELLOW}⚠️ ${C_RESET} ${C_BOLD}${cid}${C_RESET}"
+          #_screen "  ${C_YELLOW}⚠️ ${C_RESET} ${C_BOLD}${cid}${C_RESET} ${C_DIM}${details}${C_RESET}"
           wifi_ok=0
         fi
         ;;
@@ -1204,9 +1260,11 @@ PY
     case "$cid" in
       AUDIO_*)
         if [[ "$okflag" == "1" ]]; then
-          _screen "  ${C_GREEN}✅${C_RESET} ${C_BOLD}${cid}${C_RESET} ${C_DIM}${details}${C_RESET}"
+          _screen "  ${C_GREEN}✅${C_RESET} ${C_BOLD}${cid}${C_RESET}"
+          # _screen "  ${C_GREEN}✅${C_RESET} ${C_BOLD}${cid}${C_RESET} ${C_DIM}${details}${C_RESET}"
         else
-          _screen "  ${C_YELLOW}⚠️${C_RESET} ${C_BOLD}${cid}${C_RESET} ${C_DIM}${details}${C_RESET}"
+          _screen "  ${C_YELLOW}⚠️ ${C_RESET} ${C_BOLD}${cid}${C_RESET}"
+          #_screen "  ${C_YELLOW}⚠️ ${C_RESET} ${C_BOLD}${cid}${C_RESET} ${C_DIM}${details}${C_RESET}"
           audio_ok=0
         fi
         ;;
@@ -1218,13 +1276,13 @@ PY
   if [[ "$wifi_ok" -eq 1 ]]; then
     _screen "${C_BOLD}WiFi prerequisites:${C_RESET} ${C_GREEN}✅ OK${C_RESET}"
   else
-    _screen "${C_BOLD}WiFi prerequisites:${C_RESET} ${C_YELLOW}⚠️ NOT OK${C_RESET}"
+    _screen "${C_BOLD}WiFi prerequisites:${C_RESET} ${C_YELLOW}⚠️  NOT OK${C_RESET}"
   fi
 
   if [[ "$audio_ok" -eq 1 ]]; then
     _screen "${C_BOLD}Audio prerequisites:${C_RESET} ${C_GREEN}✅ OK${C_RESET}"
   else
-    _screen "${C_BOLD}Audio prerequisites:${C_RESET} ${C_YELLOW}⚠️ NOT OK${C_RESET}"
+    _screen "${C_BOLD}Audio prerequisites:${C_RESET} ${C_YELLOW}⚠️  NOT OK${C_RESET}"
   fi
 
   if [[ "$wifi_ok" -eq 1 && "$audio_ok" -eq 1 ]]; then
@@ -1232,10 +1290,10 @@ PY
   elif [[ "$wifi_ok" -eq 1 ]]; then
     _screen "${C_BOLD}Overall:${C_RESET} ${C_GREEN}✅ Patch-ready (WiFi)${C_RESET} ${C_DIM}(audio may require extra setup)${C_RESET}"
   else
-    _screen "${C_BOLD}Overall:${C_RESET} ${C_YELLOW}⚠️ Not ready - fix EFI config first${C_RESET}"
+    _screen "${C_BOLD}Overall:${C_RESET} ${C_YELLOW}⚠️  Not ready - fix EFI config first${C_RESET}"
   fi
 
-  _screen "${C_BOLD}${C_MAGENTA}======================================================${C_RESET}"
+  _screen "${C_BOLD}${C_MAGENTA}=======================================================${C_RESET}"
   echo
 }
 
@@ -1303,9 +1361,9 @@ SUMMARY_MAJOR="(unknown)"
 SUMMARY_WIFI_PAYLOAD="(none)"
 SUMMARY_AUDIO_PAYLOAD="(none)"
 SUMMARY_KDK="(none)"
-SUMMARY_STATUS_WIFI="⚠️ not applied"
-SUMMARY_STATUS_AUDIO="⚠️ not applied"
-SUMMARY_STATUS_SNAPSHOT="⚠️ not created"
+SUMMARY_STATUS_WIFI="⚠️  not applied"
+SUMMARY_STATUS_AUDIO="⚠️  not applied"
+SUMMARY_STATUS_SNAPSHOT="⚠️  not created"
 SUMMARY_LOG_LINE="(without log)"
 
 print_summary() {
@@ -1868,7 +1926,7 @@ if [[ "$MODE" == "wifi" || "$MODE" == "both" ]]; then
     APPLY_WIFI=true
   fi
 else
-  SUMMARY_STATUS_WIFI="⚠️ not applied"
+  SUMMARY_STATUS_WIFI="⚠️  not applied"
 fi
 
 if [[ "$MODE" == "audio" || "$MODE" == "both" ]]; then
@@ -1880,14 +1938,14 @@ if [[ "$MODE" == "audio" || "$MODE" == "both" ]]; then
     APPLY_AUDIO=true
   fi
 else
-  SUMMARY_STATUS_AUDIO="⚠️ not applied"
+  SUMMARY_STATUS_AUDIO="⚠️  not applied"
   SUMMARY_KDK="(none)"
 fi
 
 # If nothing to do, exit cleanly (avoid creating new snapshots)
 if [[ "$APPLY_WIFI" == false && "$APPLY_AUDIO" == false ]]; then
   ok "Nothing to do: the requested patches are already applied."
-  SUMMARY_STATUS_SNAPSHOT="⚠️ not created"
+  SUMMARY_STATUS_SNAPSHOT="⚠️  not created"
   print_summary
   exit 0
 fi
@@ -1910,7 +1968,7 @@ if [[ "$APPLY_WIFI" == true ]]; then
 elif [[ "$MODE" == "wifi" || "$MODE" == "both" ]]; then
   : # already applied; SUMMARY_STATUS_WIFI set in pre-check
 else
-  SUMMARY_STATUS_WIFI="⚠️ not applied"
+  SUMMARY_STATUS_WIFI="⚠️  not applied"
 fi
 
 # Apply Audio
@@ -1938,7 +1996,7 @@ elif [[ "$MODE" == "audio" || "$MODE" == "both" ]]; then
   : # already applied; SUMMARY_STATUS_AUDIO set in pre-check
   SUMMARY_KDK="(none)"
 else
-  SUMMARY_STATUS_AUDIO="⚠️ not applied"
+  SUMMARY_STATUS_AUDIO="⚠️  not applied"
   SUMMARY_KDK="(none)"
 fi
 
