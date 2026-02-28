@@ -1330,6 +1330,7 @@ prompt_reboot() {
     return 0
   fi
   read -r -p "Reboot now? (y/N) " ans || true
+  echo
   ans="$(echo "${ans:-}" | tr '[:upper:]' '[:lower:]')"
   case "$ans" in
     y|yes|s|sim) info "Rebooting..."; /sbin/reboot ;;
@@ -1427,6 +1428,7 @@ while true; do
       _screen "  p) --kdk <path_to_.kdk>"
       _screen "  n) --no-kdk-merge (less robust)"
       local kdk_opt="" kdk_path=""
+      echo
       read -r -p "Choose (a/p/n) [a]: " kdk_opt || true
       kdk_opt="${kdk_opt:-a}"
 
@@ -1435,7 +1437,33 @@ while true; do
       [[ "$dflag" == true ]] && args+=(--dry-run)
 
       case "$kdk_opt" in
-        a|A) args+=(--kdk-auto) ;;
+        a|A)
+          # Show the auto-selected KDK and ask for confirmation before proceeding.
+          local auto_kdk=""
+          auto_kdk="$( (kdk_pick_auto) 2>/dev/null || true )"
+          if [[ -z "${auto_kdk}" ]] || [[ "${auto_kdk}" != *.kdk ]] || [[ ! -d "${auto_kdk}/System/Library/Extensions" ]]; then
+            echo
+            warn "Unable to auto-select a valid KDK. Please install a KDK under /Library/Developer/KDKs or choose option 'p'."
+            _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
+            continue
+          fi
+
+          echo
+          info "Auto-selected KDK: ${auto_kdk}"
+          echo
+          local confirm=""
+          read -r -p "Continue with this KDK? (y/N) " confirm || true
+          confirm="$(echo "${confirm:-}" | tr '[:upper:]' '[:lower:]')"
+          case "$confirm" in
+            y|yes)
+              args+=(--kdk "${auto_kdk}")
+              ;;
+            *)
+              warn "Aborted by user. Returning to the main menu."
+              continue
+              ;;
+          esac
+          ;;
         p|P)
           read -r -p "Enter full path to .kdk: " kdk_path || true
           [[ -z "${kdk_path:-}" ]] && { warn "Empty KDK path. Aborting."; _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break; continue; }
@@ -1469,6 +1497,7 @@ while true; do
       _screen "  p) --kdk <path_to_.kdk>"
       _screen "  n) --no-kdk-merge (less robust)"
       local kdk_opt="" kdk_path=""
+      echo
       read -r -p "Choose (a/p/n) [a]: " kdk_opt || true
       kdk_opt="${kdk_opt:-a}"
 
@@ -1477,7 +1506,33 @@ while true; do
       [[ "$dflag" == true ]] && args+=(--dry-run)
 
       case "$kdk_opt" in
-        a|A) args+=(--kdk-auto) ;;
+        a|A)
+          # Show the auto-selected KDK and ask for confirmation before proceeding.
+          local auto_kdk=""
+          auto_kdk="$( (kdk_pick_auto) 2>/dev/null || true )"
+          if [[ -z "${auto_kdk}" ]] || [[ "${auto_kdk}" != *.kdk ]] || [[ ! -d "${auto_kdk}/System/Library/Extensions" ]]; then
+            echo
+            warn "Unable to auto-select a valid KDK. Please install a KDK under /Library/Developer/KDKs or choose option 'p'."
+            _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
+            continue
+          fi
+
+          echo
+          info "Auto-selected KDK: ${auto_kdk}"
+          echo
+          local confirm=""
+          read -r -p "Continue with this KDK? (y/N) " confirm || true
+          confirm="$(echo "${confirm:-}" | tr '[:upper:]' '[:lower:]')"
+          case "$confirm" in
+            y|yes)
+              args+=(--kdk "${auto_kdk}")
+              ;;
+            *)
+              warn "Aborted by user. Returning to the main menu."
+              continue
+              ;;
+          esac
+          ;;
         p|P)
           read -r -p "Enter full path to .kdk: " kdk_path || true
           [[ -z "${kdk_path:-}" ]] && { warn "Empty KDK path. Aborting."; _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break; continue; }
