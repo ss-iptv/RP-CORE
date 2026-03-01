@@ -752,6 +752,7 @@ create_snapshot() {
 # Snapshots:
 list_snapshots_readonly_screen_only() {
   step "Snapshots (diskutil apfs listSnapshots /)"
+  echo
   /usr/sbin/diskutil apfs listSnapshots / 2>&1
 }
 
@@ -759,6 +760,12 @@ list_snapshots_audit() {
   if $VERBOSE; then run_show "/usr/sbin/diskutil apfs listSnapshots /"
   else run_quiet "/usr/sbin/diskutil apfs listSnapshots /"
   fi
+}
+
+has_nonsealed_snapshots() {
+  # Returns 0 (true) if there is ANY non-sealed snapshot (i.e., beyond the original sealed SSV snapshots).
+  # This typically indicates that custom snapshots were created (e.g., by bless --create-snapshot).
+  /usr/sbin/diskutil apfs listSnapshots / 2>/dev/null | /usr/bin/grep -qiE 'Sealed:[[:space:]]*No'
 }
 
 
@@ -801,7 +808,8 @@ rollback_stock() {
 
   step "Revert to the latest SEALED snapshot (Apple stock)"
   run "/usr/sbin/bless --mount '${MNT}' --bootefi --last-sealed-snapshot"
-  ok "Rollback prepared. Reboot to apply."
+  ok "Rollback prepared"
+  ok "Reboot to apply"
 }
 
 boot_snapshot_uuid() {
@@ -815,7 +823,8 @@ boot_snapshot_uuid() {
   step "Pointing boot to snapshot UUID"
   info "UUID: $uuid"
   run "/usr/sbin/bless --mount '${MNT}' --bootefi --snapshot '$uuid'"
-  ok "Boot snapshot set. Reboot to boot into it."
+  ok "Boot snapshot defined"
+  ok "Reboot to boot into it"
 }
 
 # -------- READ-ONLY: Status (validate payloads on current SSV) --------
@@ -826,7 +835,8 @@ do_status() {
   build_ver="$(get_build_version)"
   major="$(get_major "$os_ver")"
 
-  step "Status of Root Patch (SSV atual)"
+  step "Status of Root Patch (current SSV)"
+  echo
   info "macOS: ${os_ver} (Build ${build_ver}, Major ${major})"
   echo
 
@@ -947,9 +957,9 @@ do_status() {
   echo
   _screen "${C_BOLD}${C_MAGENTA}==================== STATUS SUMMARY ===================${C_RESET}"
   if [[ "$w_ok" -eq 0 ]]; then
-    _screen "${C_BOLD}WiFi:${C_RESET} ${C_GREEN}✅ applied (hash matches payload)${C_RESET}"
+    _screen "${C_BOLD}WiFi: ${C_RESET} ${C_GREEN}✅ applied (hash matches payload)${C_RESET}"
   else
-    _screen "${C_BOLD}WiFi:${C_RESET} ${C_YELLOW}⚠️  not applied or differs from the payload${C_RESET}"
+    _screen "${C_BOLD}WiFi: ${C_RESET} ${C_YELLOW}⚠️  not applied or differs from the payload${C_RESET}"
   fi
 
   if [[ "$major" == "26" ]]; then
@@ -1377,8 +1387,8 @@ print_summary() {
   _screen "  ${C_DIM}Payload:${C_RESET} ${SUMMARY_AUDIO_PAYLOAD}"
   _screen "  ${C_DIM}KDK:${C_RESET} ${SUMMARY_KDK}"
   _screen "${C_BOLD}Snapshot:${C_RESET} ${SUMMARY_STATUS_SNAPSHOT}"
-  _screen "  ${C_DIM}${SUMMARY_LOG_LINE}${C_RESET}"
-  _screen "${C_BOLD}${C_MAGENTA}======================================================${C_RESET}"
+  # _screen "  ${C_DIM}${SUMMARY_LOG_LINE}${C_RESET}"
+  _screen "${C_BOLD}${C_MAGENTA}=======================================================${C_RESET}"
   echo
 }
 
@@ -1847,8 +1857,9 @@ if [[ "$DO_ROLLBACK" == true ]]; then
   rollback_stock
   list_snapshots_audit
   SUMMARY_STATUS_SNAPSHOT="✅ rollback prepared (reboot)"
-  print_summary
+
   if $LOG_ENABLED; then ok "Log saved to: ${LOG_FILE}"; fi
+  print_summary
   prompt_reboot
   exit 0
 fi
@@ -1861,8 +1872,10 @@ if [[ -n "$BOOT_UUID" ]]; then
   boot_snapshot_uuid "$BOOT_UUID"
   list_snapshots_audit
   SUMMARY_STATUS_SNAPSHOT="✅ boot snapshot set (reboot)"
-  print_summary
+
   if $LOG_ENABLED; then ok "Log saved to: ${LOG_FILE}"; fi
+  print_summary
+  prompt_reboot
   exit 0
 fi
 
@@ -1950,6 +1963,29 @@ if [[ "$APPLY_WIFI" == false && "$APPLY_AUDIO" == false ]]; then
   exit 0
 fi
 
+# Tahoe special-case (WiFi-only):
+# If Audio payload is already applied OR there are non-sealed snapshots (beyond the original sealed SSV),
+# proceed with the WiFi patch BUT skip AuxKC to avoid side-effects on an already customized snapshot chain.
+SKIP_AUXKC=false
+SKIP_AUXKC_REASON=""
+
+if [[ "$MAJOR" == "26" && "$MODE" == "wifi" && "$APPLY_WIFI" == true ]]; then
+  if audio_already_applied "$MAJOR"; then
+    SKIP_AUXKC=true
+    SKIP_AUXKC_REASON+="audio payload detected; "
+  fi
+
+  if has_nonsealed_snapshots; then
+    SKIP_AUXKC=true
+    SKIP_AUXKC_REASON+="non-sealed snapshot(s) detected; "
+  fi
+
+  if [[ "$SKIP_AUXKC" == true ]]; then
+    warn "Tahoe WiFi-only: AuxKC will be skipped (${SKIP_AUXKC_REASON% ;})."
+  fi
+fi
+
+
 # Mount system RW
 ROOTDEV="$(get_root_device)"
 SYSDEV="$(strip_snapshot_suffix "$ROOTDEV")"
@@ -2003,7 +2039,11 @@ fi
 # If only WiFi is being applied, apply kmutil (AuxKC)
 if [[ "$APPLY_AUDIO" == false ]]; then
   if [[ "$APPLY_WIFI" == true && ( "$MAJOR" == "14" || "$MAJOR" == "15" || "$MAJOR" == "26" ) ]]; then
-    run_kmutil_aux_modern_wireless
+    if [[ "$MAJOR" == "26" && "$MODE" == "wifi" && "$SKIP_AUXKC" == true ]]; then
+      ok "Tahoe WiFi-only: skipping AuxKC (audio payload already present and/or non-sealed snapshots detected)."
+    else
+      run_kmutil_aux_modern_wireless
+    fi
   else
     ok "Wi-Fi only: kmutil is not required."
   fi
@@ -2015,7 +2055,7 @@ SUMMARY_STATUS_SNAPSHOT="✅ created"
 # Snapshot audit AFTER
 list_snapshots_audit
 
-ok "Completed."
+ok "Completed"
 if $LOG_ENABLED; then ok "Log saved to: ${LOG_FILE}"; fi
 
 print_summary
