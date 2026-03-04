@@ -3,7 +3,7 @@
 # Double-click to open in Terminal and run the interactive menu (sudo).
 
 # Window resize
-printf '\033[8;32;125t' 2>/dev/null || true
+printf '\033[8;32;130t' 2>/dev/null || true
 
 # -------- Pretty UI (colors) --------
 if [[ -t 1 ]]; then

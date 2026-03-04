@@ -267,7 +267,7 @@ show_splash() {
   _screen "${C_DIM}Se isso te ajudou, apoiar o canal/curso mantém o projeto vivo. ❤️${C_RESET}"
   _screen ""
   _screen "${C_YELLOW}${C_BOLD}Warning #1: ${C_RESET} No copying and/or redistribution, in whole or in part, of the contents of this script/package is permitted."
-  _screen "${C_YELLOW}${C_BOLD}Warning #2: ${C_RESET} does not come with any warranty, use at your own risk."
+  _screen "${C_YELLOW}${C_BOLD}Warning #2: ${C_RESET} Does not come with any warranty, use at your own risk."
   _screen "${C_BOLD}${C_MAGENTA}=================================================================================================================================${C_RESET}"
   echo
 
@@ -329,6 +329,60 @@ sip_abort_mutation_due_to_sip() {
   sip_prompt_return_or_quit
 }
 
+
+
+
+# ---------- FileVault guard (mutating actions require FileVault OFF) ----------
+# Exit codes used only when called from the interactive menu wrapper.
+FILEVAULT_GUARD_RC_MENU_RETURN=114
+FILEVAULT_GUARD_RC_QUIT=115
+
+filevault_is_off() {
+  /usr/bin/fdesetup status 2>&1 | /usr/bin/grep -q "FileVault is Off\."
+}
+
+filevault_prompt_return_or_quit() {
+  local ans=""
+  echo
+  read -r -p "Press ENTER to return to the main menu, or Q to quit (FileVault guard): " ans || true
+  ans="${ans:-}"
+  if [[ "$ans" == "Q" || "$ans" == "q" ]]; then
+    ok "Bye!"
+    exit "${FILEVAULT_GUARD_RC_QUIT}"
+  fi
+
+  # If this execution was started from the interactive menu, return a special code so
+  # the parent can immediately resume the menu without printing extra prompts.
+  if [[ "${RP_CORE_PARENT_MENU:-0}" == "1" ]]; then
+    exit "${FILEVAULT_GUARD_RC_MENU_RETURN}"
+  fi
+
+  # Non-interactive CLI: there is no menu to return to.
+  exit 1
+}
+
+filevault_abort_mutation_due_to_filevault() {
+  local action="${1:-"(unknown action)"}"
+  local fv_out=""
+  fv_out="$(/usr/bin/fdesetup status 2>&1 || true)"
+
+  # Force log creation (mutating actions are expected to have logs).
+  LOG_ENABLED=true
+  init_log_if_needed
+
+  _log "[ERR ] FileVault guard: FileVault is NOT OFF."
+  _log "[INFO] Aborting: ${action}"
+  _log "[INFO] fdesetup status:"
+  while IFS= read -r line; do
+    _log "       ${line}"
+  done <<< "${fv_out}"
+
+  _screen "${C_RED}${C_BOLD}[ERR ]${C_RESET} FileVault is ENABLED (or status is not 'Off'). Aborting..."
+  echo
+  _screen "${C_YELLOW}${C_BOLD}[INFO]${C_RESET} A log has been created: ${C_DIM}${LOG_FILE}${C_RESET}"
+
+  filevault_prompt_return_or_quit
+}
 
 # ---------- Hash helpers (global) ----------
 sha256_file() { /usr/bin/shasum -a 256 "$1" 2>/dev/null | awk '{print $1}'; }
@@ -492,7 +546,7 @@ EOF
 }
 
 check_tools() {
-  for c in rsync kmutil bless diskutil mount umount cp chmod chown awk grep sw_vers date bash tee uname csrutil tr sed head wc ls find xargs stat sort cut shasum; do
+  for c in rsync kmutil bless diskutil mount umount cp chmod chown awk grep sw_vers date bash tee uname csrutil fdesetup tr sed head wc ls find xargs stat sort cut shasum; do
     have_cmd "$c" || fail "Required command not found: $c"
   done
 }
@@ -1478,9 +1532,9 @@ while true; do
 
       RP_CORE_PARENT_MENU=1 "${ROOT_DIR}/rp-core.sh" "${args[@]}" || rc=$?
 
-      if [[ "$rc" -eq "${SIP_GUARD_RC_QUIT}" ]]; then ok "Bye!"; break; fi
+      if [[ "$rc" -eq "${SIP_GUARD_RC_QUIT}" || "$rc" -eq "${FILEVAULT_GUARD_RC_QUIT}" ]]; then ok "Bye!"; break; fi
 
-      if [[ "$rc" -eq "${SIP_GUARD_RC_MENU_RETURN}" ]]; then continue; fi
+      if [[ "$rc" -eq "${SIP_GUARD_RC_MENU_RETURN}" || "$rc" -eq "${FILEVAULT_GUARD_RC_MENU_RETURN}" ]]; then continue; fi
       # If user chose not to reboot, offer clean return to menu or quit
       _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
       ;;
@@ -1547,10 +1601,10 @@ while true; do
       RP_CORE_PARENT_MENU=1 "${ROOT_DIR}/rp-core.sh" "${args[@]}" || rc=$?
 
 
-      if [[ "$rc" -eq "${SIP_GUARD_RC_QUIT}" ]]; then ok "Bye!"; break; fi
+      if [[ "$rc" -eq "${SIP_GUARD_RC_QUIT}" || "$rc" -eq "${FILEVAULT_GUARD_RC_QUIT}" ]]; then ok "Bye!"; break; fi
 
 
-      if [[ "$rc" -eq "${SIP_GUARD_RC_MENU_RETURN}" ]]; then continue; fi
+      if [[ "$rc" -eq "${SIP_GUARD_RC_MENU_RETURN}" || "$rc" -eq "${FILEVAULT_GUARD_RC_MENU_RETURN}" ]]; then continue; fi
       _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
       ;;
     4)
@@ -1616,10 +1670,10 @@ while true; do
       RP_CORE_PARENT_MENU=1 "${ROOT_DIR}/rp-core.sh" "${args[@]}" || rc=$?
 
 
-      if [[ "$rc" -eq "${SIP_GUARD_RC_QUIT}" ]]; then ok "Bye!"; break; fi
+      if [[ "$rc" -eq "${SIP_GUARD_RC_QUIT}" || "$rc" -eq "${FILEVAULT_GUARD_RC_QUIT}" ]]; then ok "Bye!"; break; fi
 
 
-      if [[ "$rc" -eq "${SIP_GUARD_RC_MENU_RETURN}" ]]; then continue; fi
+      if [[ "$rc" -eq "${SIP_GUARD_RC_MENU_RETURN}" || "$rc" -eq "${FILEVAULT_GUARD_RC_MENU_RETURN}" ]]; then continue; fi
       _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
       ;;
     5)
@@ -1662,9 +1716,9 @@ while true; do
 
       RP_CORE_PARENT_MENU=1 "${ROOT_DIR}/rp-core.sh" "${args[@]}" || rc=$?
 
-      if [[ "$rc" -eq "${SIP_GUARD_RC_QUIT}" ]]; then ok "Bye!"; break; fi
+      if [[ "$rc" -eq "${SIP_GUARD_RC_QUIT}" || "$rc" -eq "${FILEVAULT_GUARD_RC_QUIT}" ]]; then ok "Bye!"; break; fi
 
-      if [[ "$rc" -eq "${SIP_GUARD_RC_MENU_RETURN}" ]]; then continue; fi
+      if [[ "$rc" -eq "${SIP_GUARD_RC_MENU_RETURN}" || "$rc" -eq "${FILEVAULT_GUARD_RC_MENU_RETURN}" ]]; then continue; fi
       _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
       ;;
     7)
@@ -1687,9 +1741,9 @@ while true; do
 
       RP_CORE_PARENT_MENU=1 "${ROOT_DIR}/rp-core.sh" "${args[@]}" || rc=$?
 
-      if [[ "$rc" -eq "${SIP_GUARD_RC_QUIT}" ]]; then ok "Bye!"; break; fi
+      if [[ "$rc" -eq "${SIP_GUARD_RC_QUIT}" || "$rc" -eq "${FILEVAULT_GUARD_RC_QUIT}" ]]; then ok "Bye!"; break; fi
 
-      if [[ "$rc" -eq "${SIP_GUARD_RC_MENU_RETURN}" ]]; then continue; fi
+      if [[ "$rc" -eq "${SIP_GUARD_RC_MENU_RETURN}" || "$rc" -eq "${FILEVAULT_GUARD_RC_MENU_RETURN}" ]]; then continue; fi
       _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
       ;;
     8)
@@ -1845,6 +1899,28 @@ if sip_is_enabled; then
     audit_environment "$OS_VER" "$BUILD_VER" "$MAJOR" "hide"
 
     sip_abort_mutation_due_to_sip "$local_action"
+  fi
+fi
+
+
+
+# FileVault guard: block ANY mutating action when FileVault is enabled.
+# Applies to: --mode wifi|audio|both, --rollback-stock, --boot-snapshot <UUID>
+if ! filevault_is_off; then
+  if [[ "$DO_ROLLBACK" == true ]] || [[ -n "$BOOT_UUID" ]] || [[ -n "${MODE:-}" ]]; then
+    local_action="(unknown)"
+    if [[ "$DO_ROLLBACK" == true ]]; then
+      local_action="rollback-stock"
+    elif [[ -n "$BOOT_UUID" ]]; then
+      local_action="boot-snapshot (UUID: ${BOOT_UUID})"
+    else
+      local_action="mode '${MODE}'"
+    fi
+
+    # Add a silent environment audit to the log (useful for support).
+    audit_environment "$OS_VER" "$BUILD_VER" "$MAJOR" "hide"
+
+    filevault_abort_mutation_due_to_filevault "$local_action"
   fi
 fi
 
