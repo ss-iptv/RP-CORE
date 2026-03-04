@@ -197,6 +197,7 @@ on_err() {
   LAST_RC=$?
   LAST_CMD="${BASH_COMMAND:-"(unknown)"}"
 
+  echo
   _screen "${C_RED}${C_BOLD}[ERR ]${C_RESET} The script was interrupted because a command failed."
   
   if $LOG_ENABLED; then
@@ -829,6 +830,7 @@ list_kdks_readonly_screen_only() {
   local kdk_dir="/Library/Developer/KDKs"
 
   if [[ ! -d "$kdk_dir" ]]; then
+    echo
     warn "Directory not found: $kdk_dir"
     return 0
   fi
@@ -1076,14 +1078,40 @@ do_check_efi() {
     return 1
   }
 
-  [[ -n "${cfg}" ]] || fail "Empty config.plist path."
-  cfg="$(_resolve_cfg_path "$cfg")" || fail "config.plist not found: ${cfg}"
+  # In the interactive menu, do NOT terminate the whole program on input errors.
+  # Instead, print the error and return so the menu can prompt the user (ENTER=menu / Q=quit).
+  if [[ -z "${cfg}" ]]; then
+    if [[ "${RP_CORE_PARENT_MENU:-0}" == "1" ]]; then
+      echo
+      _screen "${C_RED}${C_BOLD}[ERR ]${C_RESET} Empty config.plist path."
+      return 0
+    fi
+    fail "Empty config.plist path."
+  fi
+
+  local resolved_cfg=""
+  if ! resolved_cfg="$(_resolve_cfg_path "$cfg")"; then
+    if [[ "${RP_CORE_PARENT_MENU:-0}" == "1" ]]; then
+      echo
+      _screen "${C_RED}${C_BOLD}[ERR ]${C_RESET} config.plist not found: ${resolved_cfg}";
+      return 0
+    fi
+    fail "config.plist not found: ${resolved_cfg}"
+  fi
+  cfg="${resolved_cfg}"
 
   echo 
   info "config.plist: ${cfg}"
   echo
 
-  have_cmd python3 || fail "python3 is required for --check-efi (not found)."
+  if ! have_cmd python3; then
+    if [[ "${RP_CORE_PARENT_MENU:-0}" == "1" ]]; then
+      echo
+      _screen "${C_RED}${C_BOLD}[ERR ]${C_RESET} python3 is required for --check-efi (not found)."
+      return 0
+    fi
+    fail "python3 is required for --check-efi (not found)."
+  fi
 
   # Bash 3.2 safe: write python to a temp file, then execute it
   local py_tmp
@@ -1294,7 +1322,16 @@ else:
 PY
 
   local py_out
-  py_out="$(/usr/bin/python3 "$py_tmp" "$cfg")"
+  if ! py_out="$(/usr/bin/python3 "$py_tmp" "$cfg" 2>&1)"; then
+    /bin/rm -f "$py_tmp" 2>/dev/null || true
+    if [[ "${RP_CORE_PARENT_MENU:-0}" == "1" ]]; then
+      _screen "${C_RED}${C_BOLD}[ERR ]${C_RESET} EFI checker failed to parse the config.plist."
+      echo
+      _screen "${C_DIM}${py_out}${C_RESET}"
+      return 0
+    fi
+    fail "EFI checker failed to parse the config.plist: ${py_out}"
+  fi
   /bin/rm -f "$py_tmp" 2>/dev/null || true
 
   local wifi_ok=1 audio_ok=1
@@ -1540,6 +1577,7 @@ while true; do
       ;;
     3)
       if [[ "$major" != "26" ]]; then
+        echo
         warn "Audio (AppleHDA) applies ONLY to Tahoe (major 26)."
         _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
         continue
@@ -1609,6 +1647,7 @@ while true; do
       ;;
     4)
       if [[ "$major" != "26" ]]; then
+        echo
         warn "WiFi+Audio: audio is only for Tahoe (major 26). Use WiFi-only on 14/15."
         _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
         continue
@@ -1748,7 +1787,7 @@ while true; do
       ;;
     8)
       clear
-      do_check_efi
+      RP_CORE_PARENT_MENU=1 do_check_efi
       _pause_or_quit "Press ENTER to return to menu, or Q to quit: " || break
       ;;
     9)
