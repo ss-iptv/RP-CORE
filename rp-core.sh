@@ -1433,7 +1433,7 @@ SUMMARY_LOG_LINE="(without log)"
 print_summary() {
   echo
   _screen "${C_BOLD}${C_MAGENTA}==================== FINAL SUMMARY ====================${C_RESET}"
-  _screen "${C_BOLD}Modo:${C_RESET} ${SUMMARY_MODE}"
+  _screen "${C_BOLD}Mode:${C_RESET} ${SUMMARY_MODE}"
   _screen "${C_BOLD}macOS:${C_RESET} ${SUMMARY_OS_VER}  (Build ${SUMMARY_BUILD}, Major ${SUMMARY_MAJOR})"
   _screen "${C_BOLD}WiFi:${C_RESET} ${SUMMARY_STATUS_WIFI}"
   _screen "  ${C_DIM}Payload:${C_RESET} ${SUMMARY_WIFI_PAYLOAD}"
@@ -1928,7 +1928,7 @@ fi
 if [[ "$DO_ROLLBACK" == true ]]; then
   SUMMARY_MODE="rollback-stock"
   audit_environment "$OS_VER" "$BUILD_VER" "$MAJOR" "show"
-  step "Modo: rollback-stock"
+  step "Mode: rollback-stock"
   list_snapshots_audit
   rollback_stock
   list_snapshots_audit
@@ -1943,7 +1943,7 @@ fi
 if [[ -n "$BOOT_UUID" ]]; then
   SUMMARY_MODE="boot-snapshot"
   audit_environment "$OS_VER" "$BUILD_VER" "$MAJOR" "show"
-  step "Modo: boot-snapshot"
+  step "Mode: boot-snapshot"
   list_snapshots_audit
   boot_snapshot_uuid "$BOOT_UUID"
   list_snapshots_audit
