@@ -197,7 +197,6 @@ on_err() {
   LAST_RC=$?
   LAST_CMD="${BASH_COMMAND:-"(unknown)"}"
 
-  echo
   _screen "${C_RED}${C_BOLD}[ERR ]${C_RESET} The script was interrupted because a command failed."
   
   if $LOG_ENABLED; then
@@ -1090,14 +1089,21 @@ do_check_efi() {
   fi
 
   local resolved_cfg=""
-  if ! resolved_cfg="$(_resolve_cfg_path "$cfg")"; then
+  # NOTE: _resolve_cfg_path may return 1 when the file doesn't exist. In Bash 3.2,
+  # that can still trigger the global ERR trap (and print the generic interruption
+  # banner), even though we're handling this case. So we swallow the exit status
+  # and validate existence explicitly below.
+  resolved_cfg="$(_resolve_cfg_path "$cfg" || true)"
+
+  if [[ -z "${resolved_cfg}" || ! -f "${resolved_cfg}" ]]; then
     if [[ "${RP_CORE_PARENT_MENU:-0}" == "1" ]]; then
       echo
-      _screen "${C_RED}${C_BOLD}[ERR ]${C_RESET} config.plist not found: ${resolved_cfg}";
+      _screen "${C_RED}${C_BOLD}[ERR ]${C_RESET} config.plist not found: ${resolved_cfg:-$cfg}"
       return 0
     fi
-    fail "config.plist not found: ${resolved_cfg}"
+    fail "config.plist not found: ${resolved_cfg:-$cfg}"
   fi
+
   cfg="${resolved_cfg}"
 
   echo 
@@ -1322,7 +1328,9 @@ else:
 PY
 
   local py_out
-  if ! py_out="$(/usr/bin/python3 "$py_tmp" "$cfg" 2>&1)"; then
+  local py_rc=0
+  py_out="$(/usr/bin/python3 "$py_tmp" "$cfg" 2>&1)" || py_rc=$?
+  if [[ "$py_rc" -ne 0 ]]; then
     /bin/rm -f "$py_tmp" 2>/dev/null || true
     if [[ "${RP_CORE_PARENT_MENU:-0}" == "1" ]]; then
       _screen "${C_RED}${C_BOLD}[ERR ]${C_RESET} EFI checker failed to parse the config.plist."
