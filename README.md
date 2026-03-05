@@ -5,7 +5,7 @@
 Script to apply **Root Patching** (SSV snapshot) for:
 
 - **WiFi (BCM94360/Intel)** on macOS **Sonoma (14)**, **Sequoia (15)** and **Tahoe (26)**
-- **Audio (AppleHDA)** **only** on macOS **Tahoe (26)** (requires KDK + `kmutil`)
+- **Audio (AppleHDA)** **only** on macOS **Tahoe (26)** 
 
 ---
 
@@ -26,6 +26,8 @@ Script to apply **Root Patching** (SSV snapshot) for:
 
 - **SIP Partially Disabled**
     - `csr-active-config` = `03080000`;
+- **FileVault Off/Disabled**
+    - `fdesetup status`;    
 - **Kexts loaded in your EFI**
     - For BCM94360 (AMFIPass.kext, IO80211FamilyLegacy.kext, IOSkywalkFamily.kext and AirPortBrcmNIC.kext)
     - For Intel (AirportItlwm.kext/Ventura)
@@ -36,6 +38,8 @@ Script to apply **Root Patching** (SSV snapshot) for:
     - `-amfipassbeta` on `boot-args`
 - **Gatekeeper disabled**, or execution manually allowed in System Settings > Privacy & Security;
     - `sudo spctl --master-disable`
+- **Audio Activation** requires KDK that matches with your macOS
+    - Without correct KDK = error or stuck boot
 - **Hackintosh technical knowledge**
     - At least at a basic/intermediate level for troubleshooting if problems occur.
 
@@ -44,5 +48,8 @@ Script to apply **Root Patching** (SSV snapshot) for:
 ## Credits
 
 - [Apple](https://www.apple.com)
+    - macOS
 - [OpenCore Legacy Patcher](https://github.com/dortania/OpenCore-Legacy-Patcher)
+    - Root Patches
 - [EduCovas](https://github.com/covasedu)
+    - WiFi Drivers/Patches
