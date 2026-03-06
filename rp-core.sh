@@ -784,7 +784,7 @@ kdk_pick_auto() {
         best_m="$m"
         picked="$p"
       fi
-    elif [[ -z "$picked" || -z "$best_key" && $m -gt $best_m ]]; then
+    elif [[ -z "$picked" || ( -z "$best_key" && m -gt best_m ) ]]; then
       best_m="$m"
       picked="$p"
     fi
@@ -794,6 +794,26 @@ kdk_pick_auto() {
   [[ -d "$picked/System/Library/Extensions" ]] || fail "Invalid KDK (missing System/Library/Extensions): $picked"
 
   echo "$picked"
+}
+
+kdk_list_sorted() {
+  local base="${1:-/Library/Developer/KDKs}"
+  [[ -d "$base" ]] || return 0
+
+  local p="" bn="" ver="" key="" m=0
+  while IFS= read -r -d '' p; do
+    [[ -d "$p/System/Library/Extensions" ]] || continue
+
+    bn="$(/usr/bin/basename "$p" 2>/dev/null || echo "")"
+    ver="$(kdk_version_from_basename "$bn")"
+    key="$(kdk_version_key "$ver" 2>/dev/null || true)"
+    [[ -n "$key" ]] || key="000000000000000000000000000000000000"
+    m="$(/usr/bin/stat -f "%m" "$p" 2>/dev/null || true)"
+    [[ "$m" =~ ^[0-9]+$ ]] || m=0
+
+    /usr/bin/printf '%s %s  %s  %s
+' "$key" "$(printf '%012d' "$m")" "$bn" "$p"
+  done < <(/usr/bin/find "$base" -maxdepth 1 -type d -name "*.kdk" -print0 2>/dev/null) |     /usr/bin/sort -t $' ' -k1,1r -k2,2r -k3,3 |     /usr/bin/awk -F ' ' '{print $4}'
 }
 
 kdk_validate() {
@@ -867,23 +887,31 @@ list_kdks_readonly_screen_only() {
     return 0
   fi
 
-  local kdks
-  kdks="$(/usr/bin/find "$kdk_dir" -maxdepth 1 -type d -name "KDK_*.kdk" 2>/dev/null | /usr/bin/sort || true)"
+  local kdks auto_kdk
+  kdks="$(kdk_list_sorted "$kdk_dir" || true)"
+  auto_kdk="$(kdk_pick_auto 2>/dev/null || true)"
 
   if [[ -z "$kdks" ]]; then
-    warn "No KDKs found (KDK_*.kdk) in: $kdk_dir"
+    warn "No valid KDKs found (*.kdk with System/Library/Extensions) in: $kdk_dir"
     _screen "  ${C_DIM}Tip:${C_RESET} install a KDK and place it under ${C_BOLD}${kdk_dir}${C_RESET}"
     return 0
   fi
 
   echo
-  _screen "==> Installed KDKs:"
+  _screen "==> Installed KDKs (newest first):"
   while IFS= read -r p; do
     [[ -n "$p" ]] || continue
-    local bn meta
+    local bn meta ver auto_tag
     bn="$(/usr/bin/basename "$p")"
+    ver="$(kdk_version_from_basename "$bn")"
     meta="$(/bin/ls -ld "$p" 2>/dev/null | /usr/bin/awk '{print $6" "$7" "$8"  "$5}')"
-    _screen "  ${C_GREEN}•${C_RESET} ${C_BOLD}${bn}${C_RESET}  ${C_DIM}${meta}${C_RESET}"
+    auto_tag=""
+    [[ -n "$auto_kdk" && "$p" == "$auto_kdk" ]] && auto_tag=" ${C_BOLD}${C_CYAN}[AUTO]${C_RESET}"
+    if [[ -n "$ver" ]]; then
+      _screen "  ${C_GREEN}•${C_RESET}${auto_tag} ${C_BOLD}${bn}${C_RESET}  ${C_DIM}(version ${ver}) ${meta}${C_RESET}"
+    else
+      _screen "  ${C_GREEN}•${C_RESET}${auto_tag} ${C_BOLD}${bn}${C_RESET}  ${C_DIM}${meta}${C_RESET}"
+    fi
   done <<< "$kdks"
 }
 
