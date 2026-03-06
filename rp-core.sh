@@ -721,43 +721,76 @@ kdk_preflight_or_die() {
   [[ -n "$any" ]] || fail "KDK not found: no valid '*.kdk' directory in '${base}' (must contain System/Library/Extensions)."
 }
 
+kdk_version_from_basename() {
+  local bn="$1"
+  local ver=""
+
+  if [[ "$bn" =~ ^KDK_([0-9]+(\.[0-9]+)*)_.+\.kdk$ ]]; then
+    ver="${BASH_REMATCH[1]}"
+  fi
+
+  echo "$ver"
+}
+
+kdk_version_key() {
+  local ver="$1"
+  local key=""
+  local part=""
+  local count=0
+  local IFS='.'
+
+  [[ -n "$ver" ]] || return 1
+
+  for part in $ver; do
+    [[ "$part" =~ ^[0-9]+$ ]] || return 1
+    key+="$(printf '%06d' "$part")"
+    count=$((count + 1))
+  done
+
+  # Normalize key length so 26.3 < 26.3.1 < 26.3.1.1, etc.
+  while (( count < 6 )); do
+    key+="000000"
+    count=$((count + 1))
+  done
+
+  echo "$key"
+}
+
 kdk_pick_auto() {
   local base="/Library/Developer/KDKs"
   [[ -d "$base" ]] || fail "KDKs folder does not exist: $base"
 
-  local picked="" best_ver=-1 best_m=0 m p bn maj min ver
+  local picked="" best_key="" best_m=0 m p bn ver key
 
-  # Prefer the NEWEST KDK by version in the folder name (KDK_<major>.<minor>_*.kdk).
+  # Prefer the NEWEST KDK by full dotted version in the folder name
+  # (e.g. 26.3 < 26.3.1 < 26.3.1.1).
   # If multiple have the same version, pick the newest by mtime.
-  # Fallback: if we cannot parse the version, fall back to newest by mtime.
+  # If the version cannot be parsed, fall back to mtime.
   while IFS= read -r -d '' p; do
+    [[ -d "$p/System/Library/Extensions" ]] || continue
+
     bn="$(/usr/bin/basename "$p" 2>/dev/null || echo "")"
-    maj="" min="" ver=-1
-
-    if [[ "$bn" =~ ^KDK_([0-9]+)\.([0-9]+)_.+\.kdk$ ]]; then
-      maj="${BASH_REMATCH[1]}"
-      min="${BASH_REMATCH[2]}"
-      if [[ "$maj" =~ ^[0-9]+$ ]] && [[ "$min" =~ ^[0-9]+$ ]]; then
-        ver=$(( maj * 1000 + min ))
-      fi
-    else
-      ver=0
-    fi
-
+    ver="$(kdk_version_from_basename "$bn")"
+    key="$(kdk_version_key "$ver" 2>/dev/null || true)"
     m="$(/usr/bin/stat -f "%m" "$p" 2>/dev/null || true)"
-    [[ -n "$m" ]] || m=0
+    [[ "$m" =~ ^[0-9]+$ ]] || m=0
 
-    if (( ver > best_ver )); then
-      best_ver="$ver"
-      best_m="$m"
-      picked="$p"
-    elif (( ver == best_ver )) && [[ "$m" =~ ^[0-9]+$ ]] && (( m > best_m )); then
+    if [[ -n "$key" ]]; then
+      if [[ -z "$best_key" || "$key" > "$best_key" ]]; then
+        best_key="$key"
+        best_m="$m"
+        picked="$p"
+      elif [[ "$key" == "$best_key" ]] && (( m > best_m )); then
+        best_m="$m"
+        picked="$p"
+      fi
+    elif [[ -z "$picked" || -z "$best_key" && $m -gt $best_m ]]; then
       best_m="$m"
       picked="$p"
     fi
   done < <(/usr/bin/find "$base" -maxdepth 1 -type d -name "*.kdk" -print0 2>/dev/null)
 
-  [[ -n "$picked" ]] || fail "No '*.kdk' directory found in $base."
+  [[ -n "$picked" ]] || fail "No valid '*.kdk' directory found in $base."
   [[ -d "$picked/System/Library/Extensions" ]] || fail "Invalid KDK (missing System/Library/Extensions): $picked"
 
   echo "$picked"
