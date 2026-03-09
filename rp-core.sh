@@ -108,7 +108,7 @@
 
 set -Eeuo pipefail
 
-RPVERSION=1.0.1
+RPVERSION=1.0.2
 
 # -------- Terminal resize (UI) --------
 # Resize the Terminal window (rows x cols) for a consistent UI experience.
