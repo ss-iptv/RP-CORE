@@ -39,7 +39,8 @@ Script to apply **Root Patching** (SSV snapshot) for:
 - **Gatekeeper disabled**, or execution manually allowed in System Settings > Privacy & Security;
     - `sudo spctl --master-disable`
 - **Audio Activation** requires KDK that matches with your macOS
-    - Without correct KDK = error or stuck boot
+    - Without correct KDK = error or stuck boot OR;
+    - Error applying the patch.
 - **Hackintosh technical knowledge**
     - At least at a basic/intermediate level for troubleshooting if problems occur.
 
